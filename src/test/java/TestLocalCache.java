@@ -1,3 +1,4 @@
+import me.cache.local.Expire;
 import me.cache.local.LocalCache;
 import me.cache.local.LocalCacheFactory;
 import org.apache.commons.lang3.RandomUtils;
@@ -17,9 +18,9 @@ public class TestLocalCache {
 
     static LocalCache localCache = LocalCacheFactory.createLruLocalCache(3);
     static {
-        localCache.put("key1", 1, 1000);
-        localCache.put("key2", 2, -1);
-        localCache.put("key3", 3, -1);
+        localCache.put("key1", 1, Expire.SECOND);
+        localCache.put("key2", 2);
+        localCache.put("key3", 3);
     }
 
     @Test
@@ -33,7 +34,7 @@ public class TestLocalCache {
         assertTrue(localCache.get("key3").equals(3));
         assertTrue(localCache.get("key4").equals(4));
 
-        sleep(1002L);
+        sleep(Expire.SECOND+10);
 
         assertTrue(localCache.size()==3);
         assertTrue(localCache.get("key1").equals(1));

@@ -2,16 +2,21 @@ package me.cache.local;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import me.cache.local.exceptions.CacheFullException;
+import me.cache.local.exceptions.CacheNotFoundException;
 
 import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Created by OurEDA on 2015/12/31.
  */
 public class LruLocalCache implements LocalCache {
+
+    Lock lock = new ReentrantLock(true);
 
     private final long capacity;
     private AtomicLong size = new AtomicLong(0L);
@@ -19,7 +24,7 @@ public class LruLocalCache implements LocalCache {
     HashMap<LruKey, Object> cache = Maps.newLinkedHashMap();//new HashMap<LruKey, Object>();
     LinkedList<LruKey> keys = Lists.newLinkedList(); //new LinkedList<LruKey>();
 
-    private synchronized void moveToFirst(LruKey lruKey) {
+    private void moveToFirst(LruKey lruKey) {
         keys.remove(lruKey);
         keys.addFirst(lruKey);
     }
@@ -28,12 +33,14 @@ public class LruLocalCache implements LocalCache {
         capacity = i;
     }
 
-    public synchronized void put(String key, Object val) {
-        put(key, val, Expire.Never);
+    public void put(String key, Object val) throws CacheFullException {
+        put(key, val, Expire.NEVER);
     }
-    public synchronized void put(String key, Object val, long expire) {
+    public void put(String key, Object val, long expire) throws CacheFullException {
 
         LruKey lruKey = new LruKey(key, expire);
+
+        lock.lock();
 
         //如果还有空间，直接保存
         if (size() < capacity) {
@@ -53,20 +60,21 @@ public class LruLocalCache implements LocalCache {
             // 在keys中移除淘汰key，替换成新的key，同时移除cache中淘汰key
             LruKey oldKey = null;
             for (LruKey it : keys) {
-                if (it.getExpire() == Expire.Never || it.isExpired()) {
+                if (it.getExpire() == Expire.NEVER || it.isExpired()) {
                     oldKey = it;
                     break;
                 }
             }
             if (oldKey == null) {
-                //failed
-                return;
+                throw CacheFullException.instance;
             }
             cache.remove(oldKey);
             cache.put(lruKey, val);
             keys.remove(oldKey);
             keys.addFirst(lruKey);
         }
+
+        lock.unlock();
     }
 
     public long size() {
@@ -74,17 +82,19 @@ public class LruLocalCache implements LocalCache {
     }
 
     // 会修改keys，如果key过期，还会修改cache，因此是同步块
-    public synchronized Object get(String key) {
+    public Object get(String key) throws CacheNotFoundException {
 
         LruKey lruKey = new LruKey(key);
 
+        lock.lock();
+
         Object val = cache.get(lruKey);
         if (val == null) {
-            return null;
+            throw CacheNotFoundException.instance;
         }
 
         lruKey = findLruKey(lruKey);
-        // 如果已过期，从key和cache中删掉，
+        // 如果已过期，从key和cache中删掉。第一次过期的key仍能返回value
         if (lruKey.isExpired()) {
             cache.remove(lruKey);
             keys.remove(lruKey);
@@ -92,6 +102,8 @@ public class LruLocalCache implements LocalCache {
         } else {
             moveToFirst(new LruKey(key));
         }
+        lock.unlock();
+
         return val;
     }
 

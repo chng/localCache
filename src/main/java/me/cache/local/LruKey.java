@@ -10,7 +10,7 @@ public class LruKey {
         return key;
     }
 
-    private long expire = Expire.Never;
+    private long expire = Expire.NEVER;
     public long getExpire() {
         return expire;
     }
@@ -26,7 +26,7 @@ public class LruKey {
     }
 
     public boolean isExpired() {
-        return getExpire()!=Expire.Never && gmtCreate+getExpire()<System.currentTimeMillis();
+        return getExpire()!=Expire.NEVER && gmtCreate+getExpire()<System.currentTimeMillis();
     }
 
     @Override
